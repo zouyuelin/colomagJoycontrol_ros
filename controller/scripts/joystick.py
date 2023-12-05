@@ -5,7 +5,7 @@ import numpy as np
 import rospy
 import RPi.GPIO as GPIO
 from sensor_msgs.msg import JointState
-from multiprocessing import Process, Array
+from multiprocessing import Process, Array, Value
 import multiprocessing
 
 
@@ -27,8 +27,11 @@ OUTPUT = GPIO.OUT
 
 lspeed = 100
 rotateSpeed = 50
+
+rotationCountReader = Value("f",0)
+linearCountReader = Value("f",0)
 # msg_ = np.zeros((7,),np.float16)
-msg_ = Array("f",[0,0,0,0,0,0,0])
+msg_ = Array("f",[0,0,0,0,0,0,0,0,0,0,0,0,0,0])
 lock = multiprocessing.Lock()
 
 def delayMicroseconds(sec):
@@ -62,36 +65,51 @@ def Lmotor(directionL:bool,dis:float):
         # sleep(0.005)
         GPIO.output (steppinL,GPIO.LOW)
         delayMicroseconds(50)
+        if(directionL == FORWARD):
+            linearCountReader.value = linearCountReader.value+1
+        else:
+            linearCountReader.value = linearCountReader.value-1
         # sleep(0.005)
 
 def LmotorD(directionL:bool):
     GPIO.output(directionpinL,directionL)
-    for i in range(3): # stepsPerRevolution*dis/6
+    for i in range(2): # stepsPerRevolution*dis/6
         GPIO.output (steppinL,GPIO.HIGH)
         delayMicroseconds(50)
         # sleep(0.005)
         GPIO.output (steppinL,GPIO.LOW)
         delayMicroseconds(50)
-        # sleep(0.005)
+        if(directionL == FORWARD):
+            linearCountReader.value = linearCountReader.value+1
+        else:
+            linearCountReader.value = linearCountReader.value-1
 
 def Rmotor(directionR = CLOCKWISE):
     GPIO.output(directionpinR,directionR)
-    for i in range(200):
+    for i in range(int(stepsPerRevolution/4)):
         GPIO.output (steppinR,GPIO.HIGH)
         delayMicroseconds(rotateSpeed)
         # sleep(0.005)
         GPIO.output (steppinR,GPIO.LOW)
         delayMicroseconds(rotateSpeed)
+        if(directionR == CLOCKWISE):
+            rotationCountReader.value = rotationCountReader.value+1
+        else:
+            rotationCountReader.value = rotationCountReader.value-1
         # sleep(0.005)
 
 def RmotorD(directionR = CLOCKWISE):
     GPIO.output(directionpinR,directionR)
-    for i in range(3):
+    for i in range(2):
         GPIO.output (steppinR,GPIO.HIGH)
         delayMicroseconds(rotateSpeed)
         # sleep(0.005)
         GPIO.output (steppinR,GPIO.LOW)
         delayMicroseconds(rotateSpeed)
+        if(directionR == CLOCKWISE):
+            rotationCountReader.value = rotationCountReader.value+1
+        else:
+            rotationCountReader.value = rotationCountReader.value-1
 
 def RotationThread():
     # global msg_
@@ -112,7 +130,7 @@ def RotationThread():
 
 def LinearThread():
     while True:
-        if msg_[1] >= 1:
+        if msg_[4] >= 50:
             GPIO.output(ValveFront,GPIO.LOW)
             GPIO.output(ValveRear,GPIO.HIGH)
             sleep(0.02)
@@ -123,7 +141,7 @@ def LinearThread():
             Lmotor(FORWARD,10)
             print("moving")
             sleep(0.001)
-        if msg_[1] <= -1:
+        if msg_[4] <= -50:
             GPIO.output(ValveFront,GPIO.LOW)
             GPIO.output(ValveRear,GPIO.HIGH)
             sleep(0.02)
@@ -153,6 +171,8 @@ def ft_sub():
     
     while not rospy.is_shutdown():
         # print(msg_[0])
+        print(linearCountReader.value)
+        print(rotationCountReader.value)
         rate.sleep()
 
 if __name__=='__main__':
