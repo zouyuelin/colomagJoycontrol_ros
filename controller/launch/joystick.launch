@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+    <node name="serial_node" pkg="rosserial_arduino" type="serial_node.py" output="screen" args="/dev/ttyUSB0"/>
+    <!--force sensor -->
+    <node name="joycontrol" pkg="controller" type="joystick.py" respawn="false" output="screen"/>
+
+    <!--UR Driver  -->
+   
+
+</launch>
