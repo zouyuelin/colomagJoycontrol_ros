@@ -5,7 +5,7 @@ import numpy as np
 import rospy
 import RPi.GPIO as GPIO
 from sensor_msgs.msg import JointState
-from multiprocessing import Process, Array, Value
+from multiprocessing import Process, Array, Value, Queue
 import multiprocessing
 
 
@@ -29,14 +29,19 @@ lspeed = 100
 rotateSpeed = 50
 
 rotationCountReader = Value("f",0)
+rotationCountReader_ = Value("f",0)
 linearCountReader = Value("f",0)
+linearCountReader_ = Value("f",0)
 # msg_ = np.zeros((7,),np.float16)
 msg_ = Array("f",[0,0,0,0,0,0,0,0,0,0,0,0,0,0])
+
+qu = Queue()
 lock = multiprocessing.Lock()
 
 def delayMicroseconds(sec):
-    start = time.time()
-    while (time.time()-start)*1000000 < sec:
+    start = time.perf_counter()
+    tmp = sec/1000000.0
+    while (time.perf_counter()-start) < tmp:
         pass
 
 def setupBoard():
@@ -72,6 +77,7 @@ def Lmotor(directionL:bool,dis:float):
         # sleep(0.005)
 
 def LmotorD(directionL:bool):
+    # se.acquire()
     GPIO.output(directionpinL,directionL)
     for i in range(2): # stepsPerRevolution*dis/6
         GPIO.output (steppinL,GPIO.HIGH)
@@ -83,6 +89,8 @@ def LmotorD(directionL:bool):
             linearCountReader.value = linearCountReader.value+1
         else:
             linearCountReader.value = linearCountReader.value-1
+    # qu.put(linearCountReader.value)
+    # se.release()
 
 def Rmotor(directionR = CLOCKWISE):
     GPIO.output(directionpinR,directionR)
@@ -116,11 +124,9 @@ def RotationThread():
     while True:
         # print(stepsPerRevolution)
         if msg_[0] >= 1:
-            print("rotating")
             Rmotor(CLOCKWISE)
             sleep(0.001)
         if msg_[0] == -1:
-            print("counter rotating")
             Rmotor(COUNTERCLOCK)
             sleep(0.001)
         if msg_[5] > 50:
@@ -139,7 +145,6 @@ def LinearThread():
             GPIO.output(ValveRear,GPIO.LOW)
             sleep(0.02)
             Lmotor(FORWARD,10)
-            print("moving")
             sleep(0.001)
         if msg_[4] <= -50:
             GPIO.output(ValveFront,GPIO.LOW)
@@ -150,7 +155,6 @@ def LinearThread():
             GPIO.output(ValveRear,GPIO.LOW)
             sleep(0.02)
             Lmotor(BACKWARD,10)
-            print("back moving")
             sleep(0.001)
 
         if msg_[6] > 50:
@@ -160,19 +164,21 @@ def LinearThread():
         
 
 def doMsg(msg:JointState):
-    for i in range(7):
+    for i in range(14):
         msg_[i] = msg.position[i]
 
 
 def ft_sub():
     rospy.init_node('mediator',anonymous=True)
     sub = rospy.Subscriber('joystick',JointState,doMsg,queue_size=10)
-    rate = rospy.Rate(1000)
+    rate = rospy.Rate(500)
     
     while not rospy.is_shutdown():
-        # print(msg_[0])
-        print(linearCountReader.value)
-        print(rotationCountReader.value)
+        # se.acquire()
+        # print("linear count number is:",value)
+        # print("rotation count number is:",rotationCountReader.value)
+        
+        # se.release()
         rate.sleep()
 
 if __name__=='__main__':
